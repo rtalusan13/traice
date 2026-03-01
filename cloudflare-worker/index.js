@@ -8,7 +8,7 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
-const AEDIFY_URL = 'https://traice-backend-26c625a8.aedify.ai/synthesize';
+const AEDIFY_URL = 'https://traice-backend-26c625a8-69ccf09a.aedify.ai/synthesize';
 
 export default {
   async fetch(request, env) {
