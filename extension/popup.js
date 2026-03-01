@@ -13,6 +13,87 @@ const screenshotZone  = document.getElementById('screenshotZone');
 const thumbsEl        = document.getElementById('thumbs');
 const spinner         = document.getElementById('spinner');
 const outputEl        = document.getElementById('output');
+const csvDownloadBtn  = document.getElementById('csvDownloadBtn');
+
+// ── Session Type Labels ───────────────────────────────────────────────────────
+const SESSION_TYPE_LABELS = {
+  RESEARCH_ESSAY: 'Research Essay',
+  COMPARISON:     'Comparison',
+  PLANNING:       'Planning',
+  SCIENTIFIC:     'Scientific Research',
+  GENERAL:        'General Research'
+};
+
+// ── Markdown → HTML Renderer ──────────────────────────────────────────────────
+function renderMarkdown(text) {
+  if (!text) return '';
+  const lines = text.split('\n');
+  const html = [];
+  let inList = false;
+
+  function closelist() {
+    if (inList) { html.push('</ul>'); inList = false; }
+  }
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+
+    // Empty line
+    if (line.trim() === '') {
+      closelist();
+      html.push('<div style="height:6px"></div>');
+      continue;
+    }
+
+    // ## Heading
+    if (/^## /.test(line)) {
+      closelist();
+      const content = inlineFmt(line.replace(/^## /, ''));
+      html.push(`<h3 style="color:#a78bfa;font-size:13px;font-weight:600;margin:12px 0 4px 0;padding-bottom:4px;border-bottom:1px solid #222">${content}</h3>`);
+      continue;
+    }
+
+    // ### Subheading
+    if (/^### /.test(line)) {
+      closelist();
+      const content = inlineFmt(line.replace(/^### /, ''));
+      html.push(`<h4 style="color:#c4b5fd;font-size:12px;font-weight:500;margin:8px 0 3px 0">${content}</h4>`);
+      continue;
+    }
+
+    // - [ ] checkbox
+    if (/^[-*]\s*\[[ x]\]\s+/.test(line)) {
+      closelist();
+      const checked = /\[x\]/i.test(line);
+      const content = inlineFmt(line.replace(/^[-*]\s*\[[ x]\]\s+/, ''));
+      html.push(`<div style="display:flex;align-items:center;gap:6px;margin:3px 0"><input type="checkbox" disabled${checked ? ' checked' : ''} style="accent-color:#a78bfa"><span style="color:#ccc;font-size:11px">${content}</span></div>`);
+      continue;
+    }
+
+    // - item or * item (non-checkbox bullet)
+    if (/^[-*]\s+/.test(line)) {
+      if (!inList) { html.push('<ul style="list-style:none;padding-left:0;margin:0">'); inList = true; }
+      const content = inlineFmt(line.replace(/^[-*]\s+/, ''));
+      html.push(`<li style="color:#ccc;font-size:11px;line-height:1.7;margin:2px 0;padding-left:12px;border-left:2px solid #2a2a2a">${content}</li>`);
+      continue;
+    }
+
+    // Plain paragraph
+    closelist();
+    html.push(`<p style="color:#bbb;font-size:11px;line-height:1.7;margin:6px 0">${inlineFmt(line)}</p>`);
+  }
+
+  closelist();
+  return html.join('\n');
+}
+
+function inlineFmt(text) {
+  // Bold **text**
+  text = text.replace(/\*\*(.+?)\*\*/g, '<strong style="color:#fff">$1</strong>');
+  // Links [text](url)
+  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" style="color:#a78bfa">$1</a>');
+  return text;
+}
 
 // Track screenshot R2 URLs for this popup session
 // (In-memory only — URLs are also stored in chrome.storage.local under 'screenshots')
@@ -102,13 +183,37 @@ endBtn.addEventListener('click', async () => {
     outputEl.style.display = 'block';
 
     if (result.csv || result.markdown) {
-      outputEl.innerHTML = `
-        ✅ Session synthesized!<br>
-        ${result.csvUrl ? `<a href="${result.csvUrl}" target="_blank">⬇ Download CSV</a><br>` : ''}
-        <pre style="margin-top:8px;white-space:pre-wrap;color:#ccc;font-size:10px">
-${(result.markdown || '').slice(0, 400)}…</pre>`;
+      const typeLabel = SESSION_TYPE_LABELS[result.sessionType] || 'General Research';
+      const evts = payload.events;
+      const hCount = evts.filter(e => e.type === 'highlight').length;
+      const pCount = evts.filter(e => e.type === 'navigation').length;
+      const dCount = evts.filter(e => e.type === 'dwell_scrape').length;
+      const sCount = evts.filter(e => e.type === 'screenshot').length;
+
+      outputEl.innerHTML =
+        `<span style="background:#1a1a2e;color:#a78bfa;font-size:10px;padding:3px 10px;border-radius:999px;display:inline-block;margin-bottom:10px">✦ ${typeLabel}</span>` +
+        `<div style="color:#555;font-size:10px;margin-bottom:10px">${hCount} highlights · ${pCount} pages · ${dCount} scrapes · ${sCount} images</div>` +
+        `<div style="height:1px;background:#1e1e1e;margin-bottom:10px"></div>` +
+        renderMarkdown(result.markdown);
+
+      // CSV download
+      if (result.csv) {
+        csvDownloadBtn.style.display = 'block';
+        csvDownloadBtn.onclick = () => {
+          const blob = new Blob([result.csv], { type: 'text/csv' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'traice-session.csv';
+          a.click();
+          URL.revokeObjectURL(url);
+        };
+      } else {
+        csvDownloadBtn.style.display = 'none';
+      }
     } else {
       outputEl.textContent = result.error || '⚠️ No output returned.';
+      csvDownloadBtn.style.display = 'none';
     }
   } catch (err) {
     spinner.style.display = 'none';

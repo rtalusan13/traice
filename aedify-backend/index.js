@@ -129,6 +129,11 @@ STEP 2 — GENERATE OUTPUT (tailored to session type)
 - If prices were found in dwell scrapes, ALWAYS include a "## Price Summary" section in markdown.
 - Next steps MUST be specific and reference actual URLs, page titles, or content from the session. NEVER write generic advice like "explore more options" or "investigate further" or "continue researching."
 - Never truncate. If content is long, prioritize specificity over brevity.
+- Write the Session Summary as 2-3 sentences of clean natural prose. No bullet points in the summary. No markdown symbols in the summary sentences.
+- Use ## only for major section headers. Never use ### for anything except Essay Outline subsections in RESEARCH_ESSAY sessions.
+- Write next steps as imperative action sentences. Start each with a strong verb. Reference specific page titles, URLs, prices, or quoted content from the session. Never start a next step with "Explore", "Look into", "Consider", or "Research".
+- Do not add any section that is not defined in the session type template above.
+- Keep Key Highlights to the 3 most impactful user highlights maximum. Quote the exact highlighted text in quotation marks then add one sentence of analytical commentary.
 - Extract ACTUAL values from the session data for CSV cells — do not leave cells empty if the data exists anywhere in the session events.
 
 ▸ IF SESSION_TYPE = COMPARISON:

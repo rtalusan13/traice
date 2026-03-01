@@ -85,11 +85,31 @@
     /* Output */
     #spinner { display:none; font-size:11px; color:#888; text-align:center; margin:10px 0; }
     #output  {
-      display: none; margin-top: 10px; padding: 10px;
+      display: none; margin-top: 10px; padding: 12px;
       background: #1a1a1a; border-radius: 8px;
       font-size: 11px; color: #a78bfa; word-break: break-word;
+      max-height: 380px;
+      overflow-y: auto;
     }
     #output a { color: #a78bfa; }
+    #output::-webkit-scrollbar { width: 3px; }
+    #output::-webkit-scrollbar-track { background: transparent; }
+    #output::-webkit-scrollbar-thumb { background: #a78bfa; border-radius: 2px; }
+
+    /* CSV download button */
+    #csvDownloadBtn {
+      background: transparent;
+      border: 1px solid #333;
+      color: #a78bfa;
+      font-size: 11px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 8px;
+      display: none;
+    }
+    #csvDownloadBtn:hover { border-color: #a78bfa; }
   </style>
 </head>
 <body>
@@ -116,6 +136,7 @@
 
   <div id="spinner">⏳ Synthesizing with AI…</div>
   <div id="output"></div>
+  <button id="csvDownloadBtn">⬇ Download CSV</button>
 
   <script src="popup.js"></script>
 </body>
