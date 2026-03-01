@@ -1,2 +1,2 @@
 # traice
-traice web extension
+![](./imgs/cropped.png)
