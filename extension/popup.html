@@ -2,18 +2,27 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       width: 300px;
-      font-family: 'Segoe UI', sans-serif;
-      background: #0f0f0f;
-      color: #f0f0f0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: #000000;
+      color: #c5c3c3;
       padding: 18px;
       position: relative;
     }
-    h1 { font-size: 22px; font-weight: 700; letter-spacing: 1px; color: #a78bfa; }
-    .tagline { font-size: 11px; color: #555; margin-top: 3px; margin-bottom: 16px; }
+    .tagline {
+      font-size: 11px;
+      color: #555555;
+      margin-top: 3px;
+      margin-bottom: 16px;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      font-weight: 300;
+    }
 
     /* Status pill */
     .pill {
@@ -21,68 +30,70 @@
       font-size: 11px; padding: 3px 10px; border-radius: 999px;
       margin-bottom: 14px;
     }
-    .pill.idle   { background: #1a1a1a; color: #555; }
-    .pill.active { background: #1a1a2e; color: #a78bfa; }
+    .pill.idle   { background: #111111; color: #555555; }
+    .pill.active { background: #0a1a1c; color: #6ab3bb; }
     .pill.paused { background: #2a1f00; color: #f59e0b; }
     .dot { width: 7px; height: 7px; border-radius: 50%; }
-    .idle   .dot { background: #444; }
-    .active .dot { background: #a78bfa; animation: blink 1.2s infinite; }
+    .idle   .dot { background: #6ab3bb; }
+    .active .dot { background: #6ab3bb; animation: blink 1.2s infinite; }
     .paused .dot { background: #f59e0b; }
     @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
 
     /* Buttons */
     .btn {
       width: 100%; padding: 11px;
-      border: none; border-radius: 8px;
+      border: none; border-radius: 10px;
       font-size: 13px; font-weight: 600;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
       cursor: pointer; transition: opacity .15s;
       margin-bottom: 8px;
     }
     .btn:hover { opacity: .85; }
     .btn:disabled { opacity: .4; cursor: not-allowed; }
-    #startBtn  { background: #a78bfa; color: #0f0f0f; }
-    #endBtn    { background: #ef4444; color: #fff;    display: none; }
-    #resumeBtn { background: #f59e0b; color: #0f0f0f; display: none; }
+    #startBtn  { background: #6ab3bb; color: #000000; }
+    #endBtn    { background: transparent; border: 1px solid #6ab3bb; color: #6ab3bb; font-weight: 500; display: none; }
+    #resumeBtn { background: #f59e0b; color: #000000; display: none; }
 
     /* Stats */
-    #stats { font-size: 11px; color: #555; text-align: center; margin-bottom: 10px; }
+    #stats { font-size: 11px; color: #555555; text-align: center; margin-bottom: 10px; }
 
     /* Screenshot drop zone */
     #screenshotZone {
       display: none;
-      border: 1.5px dashed #333;
+      border: 1.5px dashed #1e1e1e;
       border-radius: 8px;
       padding: 12px;
       text-align: center;
       font-size: 11px;
-      color: #555;
+      color: #555555;
       cursor: pointer;
       margin-bottom: 10px;
       transition: border-color .15s;
     }
     #screenshotZone:hover,
-    #screenshotZone.drag-over { border-color: #a78bfa; color: #a78bfa; }
+    #screenshotZone.drag-over { border-color: #6ab3bb; color: #6ab3bb; }
     #screenshotZone .hint { font-size: 10px; margin-top: 4px; color: #444; }
     #screenshotZone.session-active { animation: zonePulse 2s infinite; }
     @keyframes zonePulse {
-      0%, 100% { border-color: #2a2a2a; }
-      50% { border-color: #a78bfa; }
+      0%, 100% { border-color: #1e1e1e; }
+      50% { border-color: #6ab3bb; }
     }
 
     /* Upload screenshot button */
     #uploadBtn {
-      background: #1a1a1a;
-      border: 1px solid #333;
-      color: #a78bfa;
+      background: #111111;
+      border: 1px solid #1e1e1e;
+      color: #6ab3bb;
       border-radius: 8px;
       width: 100%;
       padding: 8px;
       font-size: 11px;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
       cursor: pointer;
       margin-bottom: 10px;
       display: none;
     }
-    #uploadBtn:hover { border-color: #a78bfa; }
+    #uploadBtn:hover { border-color: #6ab3bb; }
 
     /* Screenshot thumbnails */
     #thumbs {
@@ -92,7 +103,7 @@
     .thumb {
       position: relative; width: 60px; height: 40px;
       border-radius: 4px; overflow: hidden;
-      border: 1px solid #222;
+      border: 1px solid #1e1e1e;
     }
     .thumb img { width: 100%; height: 100%; object-fit: cover; }
     .thumb .remove {
@@ -104,15 +115,15 @@
     .uploading { opacity: .5; }
 
     /* Output */
-    #spinner { display:none; font-size:11px; color:#888; text-align:center; margin:10px 0; }
+    #spinner { display:none; font-size:11px; color:#555555; text-align:center; margin:10px 0; }
     #output {
       display: none; margin-top: 10px; padding: 12px;
-      background: #1a1a1a; border-radius: 8px;
-      font-size: 11px; color: #a78bfa; word-break: break-word;
+      background: #111111; border-radius: 8px;
+      font-size: 11px; color: #c5c3c3; word-break: break-word;
       max-height: 380px;
       overflow-y: auto;
     }
-    #output a { color: #a78bfa; }
+    #output a { color: #6ab3bb; }
     /* Fix truncated prices — no text clipping inside output */
     #output * {
       text-overflow: unset !important;
@@ -121,7 +132,7 @@
     }
     #output::-webkit-scrollbar { width: 3px; }
     #output::-webkit-scrollbar-track { background: transparent; }
-    #output::-webkit-scrollbar-thumb { background: #a78bfa; border-radius: 2px; }
+    #output::-webkit-scrollbar-thumb { background: #6ab3bb; border-radius: 2px; }
 
     /* Action buttons row */
     #actionBtns {
@@ -130,10 +141,11 @@
       margin-top: 8px;
     }
     .action-btn {
-      background: #1a1a1a;
-      border: 1px solid #2a2a2a;
-      color: #ccc;
+      background: #111111;
+      border: 1px solid #1e1e1e;
+      color: #c5c3c3;
       font-size: 10px;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
       padding: 8px;
       border-radius: 8px;
       flex: 1;
@@ -144,16 +156,17 @@
       gap: 3px;
       transition: border-color .15s, color .15s;
     }
-    .action-btn:hover { border-color: #a78bfa; color: #a78bfa; }
+    .action-btn:hover { border-color: #6ab3bb; color: #6ab3bb; }
     .action-btn:disabled { opacity: .5; cursor: not-allowed; }
     .action-btn .action-icon { font-size: 16px; }
 
     /* CSV download button */
     #csvDownloadBtn {
       background: transparent;
-      border: 1px solid #333;
-      color: #a78bfa;
+      border: 1px solid #1e1e1e;
+      color: #6ab3bb;
       font-size: 11px;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
       padding: 6px 12px;
       border-radius: 6px;
       cursor: pointer;
@@ -161,14 +174,14 @@
       margin-top: 8px;
       display: none;
     }
-    #csvDownloadBtn:hover { border-color: #a78bfa; }
+    #csvDownloadBtn:hover { border-color: #6ab3bb; }
 
     /* Action response area */
     #actionResponse {
       display: none;
       margin-top: 10px;
       padding: 12px;
-      background: #1a1a1a;
+      background: #111111;
       border-radius: 8px;
       word-break: break-word;
       max-height: 300px;
@@ -181,14 +194,15 @@
     }
     #actionResponse::-webkit-scrollbar { width: 3px; }
     #actionResponse::-webkit-scrollbar-track { background: transparent; }
-    #actionResponse::-webkit-scrollbar-thumb { background: #a78bfa; border-radius: 2px; }
+    #actionResponse::-webkit-scrollbar-thumb { background: #6ab3bb; border-radius: 2px; }
 
     /* Past Sessions button */
     #pastSessionsBtn {
       background: transparent;
-      border: 1px solid #2a2a2a;
-      color: #666;
+      border: 1px solid #1e1e1e;
+      color: #555555;
       font-size: 11px;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
       padding: 8px;
       border-radius: 8px;
       width: 100%;
@@ -197,15 +211,16 @@
       display: none;
       transition: color .15s, border-color .15s;
     }
-    #pastSessionsBtn:hover { color: #a78bfa; border-color: #a78bfa; }
+    #pastSessionsBtn:hover { color: #6ab3bb; border-color: #6ab3bb; }
 
     /* Past Sessions panel */
     #pastSessionsPanel { display: none; margin-top: 10px; }
     #pastSessionsPanel .back-btn {
       background: transparent;
       border: none;
-      color: #a78bfa;
+      color: #6ab3bb;
       font-size: 11px;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
       cursor: pointer;
       margin-bottom: 8px;
       padding: 0;
@@ -217,23 +232,23 @@
     }
     #pastSessionsList::-webkit-scrollbar { width: 3px; }
     #pastSessionsList::-webkit-scrollbar-track { background: transparent; }
-    #pastSessionsList::-webkit-scrollbar-thumb { background: #a78bfa; border-radius: 2px; }
+    #pastSessionsList::-webkit-scrollbar-thumb { background: #6ab3bb; border-radius: 2px; }
     .session-card {
-      background: #1a1a1a;
+      background: #111111;
       border-radius: 8px;
       padding: 10px;
       margin-bottom: 6px;
       cursor: pointer;
       transition: border-color .15s;
-      border: 1px solid transparent;
+      border: 1px solid #1e1e1e;
     }
-    .session-card:hover { border-color: #2a2a2a; }
-    .session-card .session-date { font-size: 10px; color: #555; margin-top: 4px; }
+    .session-card:hover { border-color: #6ab3bb; }
+    .session-card .session-date { font-size: 10px; color: #555555; margin-top: 4px; }
     .session-card .session-preview { font-size: 10px; color: #888; margin-top: 4px; line-height: 1.5; }
     .session-card .session-expanded {
       margin-top: 8px;
       padding-top: 8px;
-      border-top: 1px solid #222;
+      border-top: 1px solid #1e1e1e;
     }
   </style>
 </head>
@@ -247,17 +262,17 @@
     height: 28px;
     border-radius: 50%;
     overflow: hidden;
-    border: 1.5px solid #2a2a2a;
-    background: #1a1a1a;
+    border: 1.5px solid #1e1e1e;
+    background: #111111;
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 12px;
-    color: #666;
+    color: #555555;
     cursor: default;
   ">?</div>
 
-  <h1>traice</h1>
+  <img src="../imgs/traice.png" alt="traice" style="height: 28px; width: auto; display: block;">
   <p class="tagline">trace your intent. synthesize your session.</p>
 
   <div class="pill idle" id="pill">

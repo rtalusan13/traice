@@ -108,7 +108,7 @@ function renderMarkdown(text) {
     if (/^## /.test(line)) {
       closelist();
       const content = inlineFmt(line.replace(/^## /, ''));
-      html.push(`<h3 style="color:#a78bfa;font-size:13px;font-weight:600;margin:12px 0 4px 0;padding-bottom:4px;border-bottom:1px solid #222">${content}</h3>`);
+      html.push(`<h3 style="color:#6ab3bb;font-size:13px;font-weight:600;margin:12px 0 4px 0;padding-bottom:4px;border-bottom:1px solid #1e1e1e">${content}</h3>`);
       continue;
     }
 
@@ -116,7 +116,7 @@ function renderMarkdown(text) {
     if (/^### /.test(line)) {
       closelist();
       const content = inlineFmt(line.replace(/^### /, ''));
-      html.push(`<h4 style="color:#c4b5fd;font-size:12px;font-weight:500;margin:8px 0 3px 0">${content}</h4>`);
+      html.push(`<h4 style="color:rgba(106,179,187,0.8);font-size:12px;font-weight:500;margin:8px 0 3px 0">${content}</h4>`);
       continue;
     }
 
@@ -125,7 +125,7 @@ function renderMarkdown(text) {
       closelist();
       const checked = /\[x\]/i.test(line);
       const content = inlineFmt(line.replace(/^[-*]\s*\[[ x]\]\s+/, ''));
-      html.push(`<div style="display:flex;align-items:center;gap:6px;margin:3px 0"><input type="checkbox" disabled${checked ? ' checked' : ''} style="accent-color:#a78bfa"><span style="color:#ccc;font-size:11px">${content}</span></div>`);
+      html.push(`<div style="display:flex;align-items:center;gap:6px;margin:3px 0"><input type="checkbox" disabled${checked ? ' checked' : ''} style="accent-color:#6ab3bb"><span style="color:#c5c3c3;font-size:11px">${content}</span></div>`);
       continue;
     }
 
@@ -133,7 +133,7 @@ function renderMarkdown(text) {
     if (/^[-*]\s+/.test(line)) {
       if (!inList) { html.push('<ul style="list-style:none;padding-left:0;margin:0">'); inList = true; }
       const content = inlineFmt(line.replace(/^[-*]\s+/, ''));
-      html.push(`<li style="color:#ccc;font-size:11px;line-height:1.7;margin:2px 0;padding-left:12px;border-left:2px solid #2a2a2a">${content}</li>`);
+      html.push(`<li style="color:#c5c3c3;font-size:11px;line-height:1.7;margin:2px 0;padding-left:12px;border-left:2px solid #1e3a3e">${content}</li>`);
       continue;
     }
 
@@ -150,7 +150,7 @@ function inlineFmt(text) {
   // Bold **text**
   text = text.replace(/\*\*(.+?)\*\*/g, '<strong style="color:#fff">$1</strong>');
   // Links [text](url)
-  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" style="color:#a78bfa">$1</a>');
+  text = text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" style="color:#6ab3bb">$1</a>');
   return text;
 }
 
@@ -186,15 +186,15 @@ function renderResult(result, stats) {
     `<div id="continueSection" style="margin-top:16px;text-align:center">` +
       `<div style="color:#666;font-size:11px">${cp.q}</div>` +
       `<div style="display:flex;gap:8px;margin-top:8px">` +
-        `<button id="continueYes" style="background:#1a1a2e;border:1px solid #a78bfa;color:#a78bfa;font-size:11px;padding:6px 12px;border-radius:6px;flex:1;cursor:pointer">${cp.yes}</button>` +
-        `<button id="continueNo" style="background:#1a1a1a;border:1px solid #2a2a2a;color:#555;font-size:11px;padding:6px 12px;border-radius:6px;flex:1;cursor:pointer">${cp.no}</button>` +
+        `<button id="continueYes" style="background:#0a1a1c;border:1px solid #6ab3bb;color:#6ab3bb;font-size:11px;padding:6px 12px;border-radius:6px;flex:1;cursor:pointer">${cp.yes}</button>` +
+        `<button id="continueNo" style="background:#111111;border:1px solid #1e1e1e;color:#555555;font-size:11px;padding:6px 12px;border-radius:6px;flex:1;cursor:pointer">${cp.no}</button>` +
       `</div>` +
     `</div>`;
 
   // Order: stats line → session type badge → divider → rendered markdown → continue section
   outputEl.innerHTML =
     `<div style="color:#555;font-size:10px;margin-bottom:10px">${stats.highlights} highlights · ${stats.pages} pages · ${stats.scrapes} scrapes · ${stats.images} images</div>` +
-    `<span style="background:#1a1a2e;color:#a78bfa;font-size:10px;padding:3px 10px;border-radius:999px;display:inline-block;margin-bottom:10px">✦ ${typeLabel}</span>` +
+    `<span style="background:#0a1a1c;color:#6ab3bb;font-size:10px;padding:3px 10px;border-radius:999px;border:1px solid #1e3a3e;display:inline-block;margin-bottom:10px;font-weight:500">✦ ${typeLabel}</span>` +
     `<div style="height:1px;background:#1e1e1e;margin-bottom:10px"></div>` +
     renderMarkdown(result.markdown) +
     continueHTML;
@@ -263,7 +263,7 @@ actionBtnsEl.addEventListener('click', async (e) => {
     if (data.ok && data.result) {
       actionResponseEl.style.display = 'block';
       actionResponseEl.innerHTML =
-        `<div style="color:#555;font-size:10px;margin-bottom:8px">✦ traice suggests</div>` +
+        `<div style="color:rgba(106,179,187,0.6);font-size:10px;margin-bottom:8px">✦ traice suggests</div>` +
         `<div style="height:1px;background:#1e1e1e;margin-bottom:8px"></div>` +
         renderMarkdown(data.result);
     }
@@ -323,8 +323,8 @@ async function loadProfileAvatar() {
         img.style.cssText = 'width:100%;height:100%;object-fit:cover;';
         img.onerror = () => {
           avatarEl.innerHTML = '';
-          avatarEl.style.background = '#1a1a2e';
-          avatarEl.style.color = '#a78bfa';
+          avatarEl.style.background = '#0a1a1c';
+          avatarEl.style.color = '#6ab3bb';
           avatarEl.style.fontSize = '13px';
           avatarEl.style.fontWeight = '600';
           avatarEl.textContent = initial;
@@ -332,15 +332,15 @@ async function loadProfileAvatar() {
         img.onload = () => {
           avatarEl.innerHTML = '';
           avatarEl.appendChild(img);
-          avatarEl.style.border = '1.5px solid #a78bfa';
+          avatarEl.style.border = '1.5px solid #6ab3bb';
         };
         img.src = `https://lh3.googleusercontent.com/a/${profile.id}`;
         avatarEl.innerHTML = '';
         avatarEl.appendChild(img);
       } else {
         avatarEl.textContent = initial;
-        avatarEl.style.background = '#1a1a2e';
-        avatarEl.style.color = '#a78bfa';
+        avatarEl.style.background = '#0a1a1c';
+        avatarEl.style.color = '#6ab3bb';
         avatarEl.style.fontWeight = '600';
       }
       avatarEl.title = profile.email;
@@ -541,7 +541,7 @@ pastSessionsBtn.addEventListener('click', async () => {
         const preview = (s.summary || '').replace(/[#*\[\]\-_]/g, '').slice(0, 80);
 
         return `<div class="session-card" data-idx="${idx}">` +
-          `<span style="background:#1a1a2e;color:#a78bfa;font-size:9px;padding:2px 8px;border-radius:999px">✦ ${typeLabel}</span>` +
+          `<span style="background:#0a1a1c;color:#6ab3bb;font-size:9px;padding:2px 8px;border-radius:999px;border:1px solid #1e3a3e;font-weight:500">✦ ${typeLabel}</span>` +
           `<div class="session-date">${date} · ${time}</div>` +
           `<div class="session-preview">${preview}${preview.length >= 80 ? '…' : ''}</div>` +
           `<div class="session-expanded" style="display:none">${renderMarkdown(s.fullMarkdown || '')}</div>` +
