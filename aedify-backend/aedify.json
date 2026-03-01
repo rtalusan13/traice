@@ -1,5 +1,5 @@
 {
-  "name": "traice-backend",
+  "name": "traice-backend-26c625a8",
   "framework": "node",
   "build": {
     "command": "npm install"
