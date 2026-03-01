@@ -1,0 +1,4 @@
+# Do not upload secrets to Aedify
+.env
+.env.local
+.env.production

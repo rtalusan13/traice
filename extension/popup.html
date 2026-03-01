@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      width: 300px;
+      font-family: 'Segoe UI', sans-serif;
+      background: #0f0f0f;
+      color: #f0f0f0;
+      padding: 18px;
+    }
+    h1 { font-size: 22px; font-weight: 700; letter-spacing: 1px; color: #a78bfa; }
+    .tagline { font-size: 11px; color: #555; margin-top: 3px; margin-bottom: 16px; }
+
+    /* Status pill */
+    .pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 11px; padding: 3px 10px; border-radius: 999px;
+      margin-bottom: 14px;
+    }
+    .pill.idle   { background: #1a1a1a; color: #555; }
+    .pill.active { background: #1a1a2e; color: #a78bfa; }
+    .pill.paused { background: #2a1f00; color: #f59e0b; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; }
+    .idle   .dot { background: #444; }
+    .active .dot { background: #a78bfa; animation: blink 1.2s infinite; }
+    .paused .dot { background: #f59e0b; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+
+    /* Buttons */
+    .btn {
+      width: 100%; padding: 11px;
+      border: none; border-radius: 8px;
+      font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: opacity .15s;
+      margin-bottom: 8px;
+    }
+    .btn:hover { opacity: .85; }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+    #startBtn  { background: #a78bfa; color: #0f0f0f; }
+    #endBtn    { background: #ef4444; color: #fff;    display: none; }
+    #resumeBtn { background: #f59e0b; color: #0f0f0f; display: none; }
+
+    /* Stats */
+    #stats { font-size: 11px; color: #555; text-align: center; margin-bottom: 10px; }
+
+    /* Screenshot drop zone */
+    #screenshotZone {
+      display: none;
+      border: 1.5px dashed #333;
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+      font-size: 11px;
+      color: #555;
+      cursor: pointer;
+      margin-bottom: 10px;
+      transition: border-color .15s;
+    }
+    #screenshotZone:hover,
+    #screenshotZone.drag-over { border-color: #a78bfa; color: #a78bfa; }
+    #screenshotZone .hint { font-size: 10px; margin-top: 4px; color: #444; }
+
+    /* Screenshot thumbnails */
+    #thumbs {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      margin-bottom: 10px;
+    }
+    .thumb {
+      position: relative; width: 60px; height: 40px;
+      border-radius: 4px; overflow: hidden;
+      border: 1px solid #222;
+    }
+    .thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .thumb .remove {
+      position: absolute; top: 1px; right: 2px;
+      font-size: 10px; color: #fff; cursor: pointer;
+      background: rgba(0,0,0,.6); border-radius: 2px;
+      padding: 0 2px; line-height: 14px;
+    }
+    .uploading { opacity: .5; }
+
+    /* Output */
+    #spinner { display:none; font-size:11px; color:#888; text-align:center; margin:10px 0; }
+    #output  {
+      display: none; margin-top: 10px; padding: 10px;
+      background: #1a1a1a; border-radius: 8px;
+      font-size: 11px; color: #a78bfa; word-break: break-word;
+    }
+    #output a { color: #a78bfa; }
+  </style>
+</head>
+<body>
+  <h1>traice</h1>
+  <p class="tagline">trace your intent. synthesize your session.</p>
+
+  <div class="pill idle" id="pill">
+    <div class="dot"></div>
+    <span id="pillText">Idle</span>
+  </div>
+
+  <button class="btn" id="startBtn">▶ Start Session</button>
+  <button class="btn" id="resumeBtn">▶ Resume Session</button>
+  <button class="btn" id="endBtn">■ End Session & Synthesize</button>
+
+  <div id="stats"></div>
+
+  <!-- Screenshot paste/drop zone — only visible during active session -->
+  <div id="screenshotZone" tabindex="0">
+    📋 Paste or drop a screenshot here
+    <div class="hint">Ctrl+V / Cmd+V · or drag an image file</div>
+  </div>
+  <div id="thumbs"></div>
+
+  <div id="spinner">⏳ Synthesizing with AI…</div>
+  <div id="output"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Environment files (NEVER commit API keys)
+.env
+.env.local
+.env.production
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+*.swp
+
+# Build output
+dist/
+*.exe
+
+# Wrangler
+.wrangler/
