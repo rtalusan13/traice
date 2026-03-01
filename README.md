@@ -1,2 +1,2 @@
 # traice
-![](./imgs/cropped.png)
+![](./imgs/cropped_final.png)
