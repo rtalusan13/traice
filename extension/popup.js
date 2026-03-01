@@ -1,7 +1,7 @@
 // popup.js — traice v2
 // Handles: session start/end, screenshot paste/drop → Cloudflare R2, UI state
 
-const WORKER_URL = 'https://YOUR_WORKER.YOUR_SUBDOMAIN.workers.dev';
+const WORKER_URL = 'https://traice-worker.traice.workers.dev';
 
 const startBtn        = document.getElementById('startBtn');
 const endBtn          = document.getElementById('endBtn');

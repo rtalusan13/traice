@@ -1,0 +1,10 @@
+{
+  "name": "traice-backend",
+  "framework": "node",
+  "build": {
+    "command": "npm install"
+  },
+  "runtime": {
+    "port": 3000
+  }
+}

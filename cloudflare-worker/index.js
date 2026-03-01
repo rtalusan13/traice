@@ -58,7 +58,7 @@ export default {
 
         // Construct public URL — requires R2 bucket to have public access enabled
         // or use a custom domain bound in Workers settings
-        const r2Url = `https://YOUR_R2_PUBLIC_URL/${key}`;
+        const r2Url = `https://pub-4b977624d00043898b0244be668d5b58.r2.dev/${key}`;
 
         return json({ ok: true, r2Url, key });
       } catch (e) { return json({ error: e.message }, 500); }

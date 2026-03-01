@@ -4,7 +4,7 @@
 //   2. Route INGEST_EVENT messages → local storage + Cloudflare KV
 //   3. URL/tab navigation tracking
 
-const WORKER_URL         = 'https://YOUR_WORKER.YOUR_SUBDOMAIN.workers.dev';
+const WORKER_URL         = 'https://traice-worker.traice.workers.dev';
 const INACTIVITY_PAUSE_MS = 30_000;
 
 let inactivityTimer = null;
