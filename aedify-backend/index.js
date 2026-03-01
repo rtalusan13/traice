@@ -10,7 +10,7 @@ app.use(cors());
 app.use(express.json({ limit: '4mb' }));
 
 app.post('/synthesize', async (req, res) => {
-  const { sessionId, events, screenshots, endedAt, userId } = req.body;
+  const { sessionId, events, screenshots, endedAt, userId, continuingSurf, continueSessionType } = req.body;
   if (!events?.length) return res.status(400).json({ error: 'No events' });
 
   try {
@@ -21,7 +21,11 @@ app.post('/synthesize', async (req, res) => {
         `Reference them as visual evidence in your analysis where relevant.`
       : '';
 
-    const prompt = buildPrompt(formattedEvents, screenshotNote);
+    const continuationNote = continuingSurf
+      ? '\n\nNOTE: This is a CONTINUATION session. The user previously researched this topic and chose to keep surfing for more information. Build on and extend the previous findings rather than repeating them. Reference what was already found and focus on what is NEW in this session.\n'
+      : '';
+
+    const prompt = continuationNote + buildPrompt(formattedEvents, screenshotNote);
 
     const completion = await openai.chat.completions.create({
       model:       'gpt-4o-mini',
@@ -40,7 +44,7 @@ app.post('/synthesize', async (req, res) => {
     const { sessionType, csv, markdown } = parseOutput(raw);
 
     // Push to Supermemory async
-    pushToSupermemory({ sessionId, events, screenshots, csv, markdown, endedAt, userId })
+    pushToSupermemory({ sessionId, events, screenshots, csv, markdown, endedAt, userId, sessionType })
       .catch(e => console.error('[Supermemory]', e.message));
 
     res.json({ ok: true, sessionId, sessionType, csv, markdown, synthesizedAt: new Date().toISOString() });
@@ -123,6 +127,8 @@ Then generate the two code blocks below based on that classification.
 STEP 2 — GENERATE OUTPUT (tailored to session type)
 ═══════════════════════════════════════════
 
+CRITICAL CSV RULE: Every CSV row must contain ACTUAL named entities extracted from the session — real player names, real city names, real hotel names, real product names, real prices, real statistics. Do NOT generate generic rows like "Source URL, Key Insight, 5". If a player was researched, the CSV must contain their actual stats. If travel was researched, the CSV must contain actual city names, hotel names, and prices found. If products were compared, the CSV must contain actual product names and specs. A CSV row with a relevance score of 5 and no specific named content is a FAILURE. Extract and tabulate what was actually seen.
+
 ▸ RULES THAT APPLY TO ALL SESSION TYPES:
 - The markdown summary opening line MUST name the specific topic. Write "This session focused on comparing economy flights from Chicago to Miami" NOT "The user was researching travel."
 - If the user highlighted text, those highlights are the HIGHEST-SIGNAL inputs. Reference them explicitly in your analysis (quote them).
@@ -172,16 +178,39 @@ Markdown structure:
   - [ ] Search for studies addressing [identified gap]
   - [ ] [other specific actions]
 
-▸ IF SESSION_TYPE = PLANNING:
-CSV columns: Name, Price, Date/Time (if found), Pros, Cons, URL
+▸ IF SESSION_TYPE = PLANNING (TRAVEL/TRIPS/EVENTS — most important section):
+This session involves real-world planning. The user is trying to make decisions with real money. Treat this with maximum specificity.
+
+CSV: Do NOT use generic columns. Use these exact columns based on what was found:
+- If travel: Destination, Accommodation Name, Price Per Night, Total Cost, Dates Available, Rating, Pros, Cons, Booking URL
+- If flights: Origin, Destination, Airline, Departure Time, Price, Duration, Stops, Booking URL
+- If activities/restaurants: Name, Location, Price Range, Rating, Hours, Booking Required, URL
+- If events: Event Name, Date, Venue, Ticket Price, Availability, URL
+
+Extract EVERY named hotel, flight, airline, city, attraction, restaurant, or price that appeared anywhere in the session including dwell scrape content. If a price appeared in a dwell scrape, it MUST appear in the CSV.
+
 Markdown structure:
-  ## Session Summary (1 specific sentence naming the plan)
-  ## Itinerary / Step-by-Step Plan (built from session content, day-by-day if travel)
-  ## Budget Summary (if prices found)
+  ## Session Summary
+  [1 sentence naming the specific trip or event — e.g. "This session focused on planning a 5-day trip to Tokyo in April 2026."]
+
+  ## What You Looked At
+  [Bullet list of every specific option the user viewed — every hotel name, every flight route, every attraction — with the price if found]
+
+  ## Recommended Itinerary
+  [Day-by-day plan built entirely from what was actually viewed in the session. Day 1, Day 2 etc. Include specific names, addresses, and costs where found. If not enough data for full days, build the best possible plan from available data.]
+
+  ## Budget Breakdown
+  [Table showing: Category | Item | Estimated Cost | Notes]
+  [Must include every price found in the session. End with a Total Estimated Cost row.]
+
   ## Key Highlights (quote user's highlighted text)
-  ## Next Steps (booking priority order)
+
+  ## Booking Priority
+  [Ordered list of what to book first, second, third — with specific URLs from the session]
+
+  ## Next Steps
   - [ ] Book [specific item] at [specific URL] — [price]
-  - [ ] [other specific actions with URLs and prices]
+  - [ ] [specific action with real data from session]
 
 ▸ IF SESSION_TYPE = GENERAL:
 CSV columns: Source URL, Key Insight, Relevance (1-5)
@@ -223,7 +252,7 @@ function parseOutput(raw) {
 }
 
 
-async function pushToSupermemory({ sessionId, events, screenshots, csv, markdown, endedAt, userId }) {
+async function pushToSupermemory({ sessionId, events, screenshots, csv, markdown, endedAt, userId, sessionType }) {
   if (!process.env.SUPERMEMORY_API_KEY) return;
 
   const content = [
@@ -251,6 +280,7 @@ async function pushToSupermemory({ sessionId, events, screenshots, csv, markdown
         source:         'traice',
         userId:         userId || 'anonymous',
         sessionId,
+        sessionType:    sessionType || 'GENERAL',
         type:           'research_session',
         highlightCount: events.filter(e => e.type === 'highlight').length,
         dwellCount:     events.filter(e => e.type === 'dwell_scrape').length,
@@ -272,8 +302,9 @@ app.get('/sessions', async (req, res) => {
       return res.json({ ok: true, sessions: [] });
     }
 
+    // Broader query that includes userId directly for better matching
     const searchResp = await fetch(
-      `https://api.supermemory.ai/v3/memories/search?q=${encodeURIComponent('traice research_session')}&limit=20`,
+      `https://api.supermemory.ai/v3/memories/search?q=${encodeURIComponent('traice ' + userId)}&limit=20`,
       {
         headers: {
           'Authorization': `Bearer ${process.env.SUPERMEMORY_API_KEY}`,
@@ -290,9 +321,14 @@ app.get('/sessions', async (req, res) => {
     const data = await searchResp.json();
     const memories = data.memories || data.results || [];
 
-    // Filter to this user's sessions
+    // Permissive filter: accept any result where content contains traice Session
+    // and userId appears anywhere in the result object
     const userSessions = memories
-      .filter(m => m.metadata?.userId === userId && m.metadata?.type === 'research_session')
+      .filter(m => {
+        const content = m.content || '';
+        const meta = JSON.stringify(m.metadata || {});
+        return content.includes('traice Session:') && (meta.includes(userId) || !userId);
+      })
       .map(m => {
         // Strip markdown symbols for summary
         const rawContent = m.content || '';

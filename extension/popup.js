@@ -1,9 +1,10 @@
 // popup.js — traice v2
 // Handles: session start/end, screenshot paste/drop → Cloudflare R2, UI state,
-// result persistence, past sessions, next action buttons, profile avatar
+// result persistence, past sessions, next action buttons, profile avatar,
+// continue surfing flow
 
 const WORKER_URL  = 'https://traice-worker.traice.workers.dev';
-const BACKEND_URL = 'https://traice-backend-26c625a8.aedify.ai';
+const BACKEND_URL = 'https://traice-backend-26c625a8-69ccf09a.aedify.ai';
 
 const startBtn          = document.getElementById('startBtn');
 const endBtn            = document.getElementById('endBtn');
@@ -36,6 +37,16 @@ const SESSION_TYPE_LABELS = {
   PLANNING:       'Planning',
   SCIENTIFIC:     'Scientific Research',
   GENERAL:        'General Research'
+};
+
+
+// ── Continue Surfing Prompts ──────────────────────────────────────────────────
+const CONTINUE_PROMPTS = {
+  PLANNING:       { q: 'Want to keep planning this trip?',    yes: 'Yes, keep surfing →',  no: 'No, I\'m done ✓' },
+  RESEARCH_ESSAY: { q: 'Keep researching this topic?',        yes: 'Yes, find more →',     no: 'No, I\'m done ✓' },
+  COMPARISON:     { q: 'Still comparing options?',            yes: 'Yes, keep looking →',  no: 'No, ready to decide ✓' },
+  SCIENTIFIC:     { q: 'Continue reading papers?',            yes: 'Yes, keep going →',    no: 'No, I\'m done ✓' },
+  GENERAL:        { q: 'Want to keep exploring?',             yes: 'Yes, keep surfing →',  no: 'No, I\'m done ✓' }
 };
 
 
@@ -144,32 +155,59 @@ function inlineFmt(text) {
 }
 
 
+// ── CSV Download Helper ───────────────────────────────────────────────────────
+function downloadCsv(csvContent) {
+  const blob = new Blob([csvContent], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'traice-session.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Helper to trigger CSV download from stored lastResult
+function triggerCSVDownload() {
+  chrome.storage.local.get('lastResult', ({ lastResult }) => {
+    if (lastResult?.csv) downloadCsv(lastResult.csv);
+  });
+}
+
+
 // ── Render Full Result ────────────────────────────────────────────────────────
-// Displays the synthesized output: stats → badge → divider → markdown → actions → CSV → past sessions
+// Displays: stats → badge → divider → markdown → continue section
+// Action buttons, CSV button, and past sessions rendered outside #output
 function renderResult(result, stats) {
   const typeLabel = SESSION_TYPE_LABELS[result.sessionType] || 'General Research';
 
-  // Order: stats line → session type badge → divider → rendered markdown
+  // Build continue surfing section
+  const cp = CONTINUE_PROMPTS[result.sessionType] || CONTINUE_PROMPTS.GENERAL;
+  const continueHTML =
+    `<div id="continueSection" style="margin-top:16px;text-align:center">` +
+      `<div style="color:#666;font-size:11px">${cp.q}</div>` +
+      `<div style="display:flex;gap:8px;margin-top:8px">` +
+        `<button id="continueYes" style="background:#1a1a2e;border:1px solid #a78bfa;color:#a78bfa;font-size:11px;padding:6px 12px;border-radius:6px;flex:1;cursor:pointer">${cp.yes}</button>` +
+        `<button id="continueNo" style="background:#1a1a1a;border:1px solid #2a2a2a;color:#555;font-size:11px;padding:6px 12px;border-radius:6px;flex:1;cursor:pointer">${cp.no}</button>` +
+      `</div>` +
+    `</div>`;
+
+  // Order: stats line → session type badge → divider → rendered markdown → continue section
   outputEl.innerHTML =
     `<div style="color:#555;font-size:10px;margin-bottom:10px">${stats.highlights} highlights · ${stats.pages} pages · ${stats.scrapes} scrapes · ${stats.images} images</div>` +
     `<span style="background:#1a1a2e;color:#a78bfa;font-size:10px;padding:3px 10px;border-radius:999px;display:inline-block;margin-bottom:10px">✦ ${typeLabel}</span>` +
     `<div style="height:1px;background:#1e1e1e;margin-bottom:10px"></div>` +
-    renderMarkdown(result.markdown);
+    renderMarkdown(result.markdown) +
+    continueHTML;
 
   outputEl.style.display = 'block';
 
-  // Action buttons
+  // Action buttons — rendered with data-action attributes for event delegation
   const actions = getNextActions(result.sessionType);
   actionBtnsEl.innerHTML = actions.map(a =>
     `<button class="action-btn" data-action="${a.action}">` +
     `<span class="action-icon">${a.icon}</span>${a.label}</button>`
   ).join('');
   actionBtnsEl.style.display = 'flex';
-
-  // Wire action button clicks
-  actionBtnsEl.querySelectorAll('.action-btn').forEach(btn => {
-    btn.addEventListener('click', () => handleActionClick(btn, result));
-  });
 
   // CSV download button
   if (result.csv) {
@@ -181,20 +219,31 @@ function renderResult(result, stats) {
 
   // Past sessions button
   pastSessionsBtn.style.display = 'block';
+
+  // Reset action response area
+  actionResponseEl.style.display = 'none';
+  actionResponseEl.innerHTML = '';
 }
 
 
-// ── Action Button Handler ─────────────────────────────────────────────────────
-async function handleActionClick(btn, result) {
+// ── Event Delegation: Action Buttons ──────────────────────────────────────────
+// Single stable listener on #actionBtns — handles dynamically created buttons
+actionBtnsEl.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-action]');
+  if (!btn) return;
   const action = btn.dataset.action;
 
   // CSV download handled locally
-  if (action === 'csv' && result.csv) {
-    downloadCsv(result.csv);
+  if (action === 'csv') {
+    triggerCSVDownload();
     return;
   }
 
-  // All other actions → POST to backend
+  // Fetch stored result for context
+  const stored = await new Promise(r => chrome.storage.local.get('lastResult', r));
+  const result = stored.lastResult;
+  if (!result) return;
+
   const origHTML = btn.innerHTML;
   btn.innerHTML = `<span class="action-icon">⏳</span>thinking…`;
   btn.disabled = true;
@@ -220,23 +269,40 @@ async function handleActionClick(btn, result) {
     }
   } catch (err) {
     console.error('[traice] Action failed:', err);
+    btn.innerHTML = `<span class="action-icon">⚠️</span>Error — retry`;
   } finally {
-    btn.innerHTML = origHTML;
+    if (btn.innerHTML.includes('thinking')) {
+      btn.innerHTML = origHTML;
+    }
     btn.disabled = false;
   }
-}
+});
 
 
-// ── CSV Download Helper ───────────────────────────────────────────────────────
-function downloadCsv(csvContent) {
-  const blob = new Blob([csvContent], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'traice-session.csv';
-  a.click();
-  URL.revokeObjectURL(url);
-}
+// ── Event Delegation: Continue Surfing Buttons ────────────────────────────────
+// These are inside #output, so use delegation on outputEl
+outputEl.addEventListener('click', async (e) => {
+  // "Yes" — continue surfing
+  if (e.target.id === 'continueYes') {
+    const stored = await new Promise(r => chrome.storage.local.get('lastResult', r));
+    const sessionType = stored.lastResult?.sessionType || 'GENERAL';
+    await chrome.storage.local.set({
+      continuingSurf: true,
+      continueSessionType: sessionType
+    });
+    window.close();
+    return;
+  }
+
+  // "No" — done
+  if (e.target.id === 'continueNo') {
+    const section = document.getElementById('continueSection');
+    if (section) {
+      section.innerHTML = '<div style="color:#555;font-size:11px;text-align:center;margin-top:8px">✓ Session complete</div>';
+    }
+    return;
+  }
+});
 
 
 // ── Profile Avatar ────────────────────────────────────────────────────────────
@@ -382,15 +448,23 @@ endBtn.addEventListener('click', async () => {
   actionResponseEl.style.display = 'none';
   csvDownloadBtn.style.display = 'none';
 
-  const data = await chrome.storage.local.get(['events', 'sessionId', 'screenshots', 'userId']);
+  const data = await chrome.storage.local.get([
+    'events', 'sessionId', 'screenshots', 'userId',
+    'continuingSurf', 'continueSessionType'
+  ]);
 
   const payload = {
-    sessionId:   data.sessionId || 'unknown',
-    timestamp:   new Date().toISOString(),
-    events:      data.events || [],
-    screenshots: data.screenshots || [],
-    userId:      data.userId || 'anonymous'
+    sessionId:        data.sessionId || 'unknown',
+    timestamp:        new Date().toISOString(),
+    events:           data.events || [],
+    screenshots:      data.screenshots || [],
+    userId:           data.userId || 'anonymous',
+    continuingSurf:   data.continuingSurf || false,
+    continueSessionType: data.continueSessionType || null
   };
+
+  // Clear continuation flag after reading it
+  chrome.storage.local.remove(['continuingSurf', 'continueSessionType']);
 
   try {
     const resp = await fetch(`${WORKER_URL}/end-session`, {
@@ -443,6 +517,8 @@ pastSessionsBtn.addEventListener('click', async () => {
 
   try {
     const { userId } = await chrome.storage.local.get('userId');
+    console.log('[traice] Fetching sessions for userId:', userId);
+
     if (!userId) {
       pastSessionsList.innerHTML = '<p style="color:#555;font-size:11px;text-align:center;padding:16px 0">No user ID found. Complete a session first.</p>';
       pastSessionsPanel.style.display = 'block';
@@ -452,10 +528,11 @@ pastSessionsBtn.addEventListener('click', async () => {
 
     const resp = await fetch(`${BACKEND_URL}/sessions?userId=${encodeURIComponent(userId)}`);
     const data = await resp.json();
+    console.log('[traice] Sessions response:', data);
     const sessions = data.sessions || [];
 
     if (sessions.length === 0) {
-      pastSessionsList.innerHTML = '<p style="color:#555;font-size:11px;text-align:center;padding:16px 0">No past sessions yet. Complete a session to see your history here.</p>';
+      pastSessionsList.innerHTML = '<p style="color:#555;font-size:11px;text-align:center;padding:16px 0">No sessions found. Complete a session first.</p>';
     } else {
       pastSessionsList.innerHTML = sessions.map((s, idx) => {
         const date = new Date(s.recordedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -487,7 +564,7 @@ pastSessionsBtn.addEventListener('click', async () => {
     pastSessionsBtn.style.display = 'none';
   } catch (err) {
     console.error('[traice] Failed to load sessions:', err);
-    pastSessionsList.innerHTML = '<p style="color:#555;font-size:11px;text-align:center;padding:16px 0">Failed to load sessions.</p>';
+    pastSessionsList.innerHTML = '<p style="color:#555;font-size:11px;text-align:center;padding:16px 0">Failed to load sessions. Check your connection.</p>';
     pastSessionsPanel.style.display = 'block';
     pastSessionsBtn.style.display = 'none';
   } finally {
