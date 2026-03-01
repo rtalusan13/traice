@@ -10,6 +10,7 @@
       background: #0f0f0f;
       color: #f0f0f0;
       padding: 18px;
+      position: relative;
     }
     h1 { font-size: 22px; font-weight: 700; letter-spacing: 1px; color: #a78bfa; }
     .tagline { font-size: 11px; color: #555; margin-top: 3px; margin-bottom: 16px; }
@@ -62,6 +63,26 @@
     #screenshotZone:hover,
     #screenshotZone.drag-over { border-color: #a78bfa; color: #a78bfa; }
     #screenshotZone .hint { font-size: 10px; margin-top: 4px; color: #444; }
+    #screenshotZone.session-active { animation: zonePulse 2s infinite; }
+    @keyframes zonePulse {
+      0%, 100% { border-color: #2a2a2a; }
+      50% { border-color: #a78bfa; }
+    }
+
+    /* Upload screenshot button */
+    #uploadBtn {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      color: #a78bfa;
+      border-radius: 8px;
+      width: 100%;
+      padding: 8px;
+      font-size: 11px;
+      cursor: pointer;
+      margin-bottom: 10px;
+      display: none;
+    }
+    #uploadBtn:hover { border-color: #a78bfa; }
 
     /* Screenshot thumbnails */
     #thumbs {
@@ -84,7 +105,7 @@
 
     /* Output */
     #spinner { display:none; font-size:11px; color:#888; text-align:center; margin:10px 0; }
-    #output  {
+    #output {
       display: none; margin-top: 10px; padding: 12px;
       background: #1a1a1a; border-radius: 8px;
       font-size: 11px; color: #a78bfa; word-break: break-word;
@@ -92,9 +113,40 @@
       overflow-y: auto;
     }
     #output a { color: #a78bfa; }
+    /* Fix truncated prices — no text clipping inside output */
+    #output * {
+      text-overflow: unset !important;
+      overflow-wrap: break-word;
+      white-space: normal !important;
+    }
     #output::-webkit-scrollbar { width: 3px; }
     #output::-webkit-scrollbar-track { background: transparent; }
     #output::-webkit-scrollbar-thumb { background: #a78bfa; border-radius: 2px; }
+
+    /* Action buttons row */
+    #actionBtns {
+      display: none;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .action-btn {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      color: #ccc;
+      font-size: 10px;
+      padding: 8px;
+      border-radius: 8px;
+      flex: 1;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      transition: border-color .15s, color .15s;
+    }
+    .action-btn:hover { border-color: #a78bfa; color: #a78bfa; }
+    .action-btn:disabled { opacity: .5; cursor: not-allowed; }
+    .action-btn .action-icon { font-size: 16px; }
 
     /* CSV download button */
     #csvDownloadBtn {
@@ -110,9 +162,101 @@
       display: none;
     }
     #csvDownloadBtn:hover { border-color: #a78bfa; }
+
+    /* Action response area */
+    #actionResponse {
+      display: none;
+      margin-top: 10px;
+      padding: 12px;
+      background: #1a1a1a;
+      border-radius: 8px;
+      word-break: break-word;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    #actionResponse * {
+      text-overflow: unset !important;
+      overflow-wrap: break-word;
+      white-space: normal !important;
+    }
+    #actionResponse::-webkit-scrollbar { width: 3px; }
+    #actionResponse::-webkit-scrollbar-track { background: transparent; }
+    #actionResponse::-webkit-scrollbar-thumb { background: #a78bfa; border-radius: 2px; }
+
+    /* Past Sessions button */
+    #pastSessionsBtn {
+      background: transparent;
+      border: 1px solid #2a2a2a;
+      color: #666;
+      font-size: 11px;
+      padding: 8px;
+      border-radius: 8px;
+      width: 100%;
+      margin-top: 8px;
+      cursor: pointer;
+      display: none;
+      transition: color .15s, border-color .15s;
+    }
+    #pastSessionsBtn:hover { color: #a78bfa; border-color: #a78bfa; }
+
+    /* Past Sessions panel */
+    #pastSessionsPanel { display: none; margin-top: 10px; }
+    #pastSessionsPanel .back-btn {
+      background: transparent;
+      border: none;
+      color: #a78bfa;
+      font-size: 11px;
+      cursor: pointer;
+      margin-bottom: 8px;
+      padding: 0;
+    }
+    #pastSessionsPanel .back-btn:hover { text-decoration: underline; }
+    #pastSessionsList {
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    #pastSessionsList::-webkit-scrollbar { width: 3px; }
+    #pastSessionsList::-webkit-scrollbar-track { background: transparent; }
+    #pastSessionsList::-webkit-scrollbar-thumb { background: #a78bfa; border-radius: 2px; }
+    .session-card {
+      background: #1a1a1a;
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 6px;
+      cursor: pointer;
+      transition: border-color .15s;
+      border: 1px solid transparent;
+    }
+    .session-card:hover { border-color: #2a2a2a; }
+    .session-card .session-date { font-size: 10px; color: #555; margin-top: 4px; }
+    .session-card .session-preview { font-size: 10px; color: #888; margin-top: 4px; line-height: 1.5; }
+    .session-card .session-expanded {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid #222;
+    }
   </style>
 </head>
 <body>
+  <!-- Profile avatar -->
+  <div id="profileAvatar" style="
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 1.5px solid #2a2a2a;
+    background: #1a1a1a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: #666;
+    cursor: default;
+  ">?</div>
+
   <h1>traice</h1>
   <p class="tagline">trace your intent. synthesize your session.</p>
 
@@ -129,14 +273,24 @@
 
   <!-- Screenshot paste/drop zone — only visible during active session -->
   <div id="screenshotZone" tabindex="0">
-    📋 Paste or drop a screenshot here
-    <div class="hint">Ctrl+V / Cmd+V · or drag an image file</div>
+    📋 Paste • Drag &amp; Drop • or Upload a Screenshot
+    <div class="hint">Screenshots are added to your session as high-signal context</div>
   </div>
+  <input type="file" accept="image/*" id="filePickerInput" style="display:none">
+  <button id="uploadBtn">📁 Upload Screenshot</button>
   <div id="thumbs"></div>
 
   <div id="spinner">⏳ Synthesizing with AI…</div>
   <div id="output"></div>
+  <div id="actionBtns"></div>
   <button id="csvDownloadBtn">⬇ Download CSV</button>
+  <div id="actionResponse"></div>
+  <button id="pastSessionsBtn">📋 Past Sessions</button>
+
+  <div id="pastSessionsPanel">
+    <button class="back-btn" id="backFromSessions">← Back</button>
+    <div id="pastSessionsList"></div>
+  </div>
 
   <script src="popup.js"></script>
 </body>

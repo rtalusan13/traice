@@ -10,7 +10,7 @@ app.use(cors());
 app.use(express.json({ limit: '4mb' }));
 
 app.post('/synthesize', async (req, res) => {
-  const { sessionId, events, screenshots, endedAt } = req.body;
+  const { sessionId, events, screenshots, endedAt, userId } = req.body;
   if (!events?.length) return res.status(400).json({ error: 'No events' });
 
   try {
@@ -40,7 +40,7 @@ app.post('/synthesize', async (req, res) => {
     const { sessionType, csv, markdown } = parseOutput(raw);
 
     // Push to Supermemory async
-    pushToSupermemory({ sessionId, events, screenshots, csv, markdown, endedAt })
+    pushToSupermemory({ sessionId, events, screenshots, csv, markdown, endedAt, userId })
       .catch(e => console.error('[Supermemory]', e.message));
 
     res.json({ ok: true, sessionId, sessionType, csv, markdown, synthesizedAt: new Date().toISOString() });
@@ -223,7 +223,7 @@ function parseOutput(raw) {
 }
 
 
-async function pushToSupermemory({ sessionId, events, screenshots, csv, markdown, endedAt }) {
+async function pushToSupermemory({ sessionId, events, screenshots, csv, markdown, endedAt, userId }) {
   if (!process.env.SUPERMEMORY_API_KEY) return;
 
   const content = [
@@ -249,6 +249,7 @@ async function pushToSupermemory({ sessionId, events, screenshots, csv, markdown
       content,
       metadata: {
         source:         'traice',
+        userId:         userId || 'anonymous',
         sessionId,
         type:           'research_session',
         highlightCount: events.filter(e => e.type === 'highlight').length,
@@ -259,6 +260,140 @@ async function pushToSupermemory({ sessionId, events, screenshots, csv, markdown
     })
   });
 }
+
+
+// ── GET /sessions — Fetch past sessions from Supermemory ──────────────────────
+app.get('/sessions', async (req, res) => {
+  const { userId } = req.query;
+  if (!userId) return res.json({ ok: true, sessions: [] });
+
+  try {
+    if (!process.env.SUPERMEMORY_API_KEY) {
+      return res.json({ ok: true, sessions: [] });
+    }
+
+    const searchResp = await fetch(
+      `https://api.supermemory.ai/v3/memories/search?q=${encodeURIComponent('traice research_session')}&limit=20`,
+      {
+        headers: {
+          'Authorization': `Bearer ${process.env.SUPERMEMORY_API_KEY}`,
+          'Content-Type':  'application/json'
+        }
+      }
+    );
+
+    if (!searchResp.ok) {
+      console.error('[sessions] Supermemory search failed:', searchResp.status);
+      return res.json({ ok: true, sessions: [] });
+    }
+
+    const data = await searchResp.json();
+    const memories = data.memories || data.results || [];
+
+    // Filter to this user's sessions
+    const userSessions = memories
+      .filter(m => m.metadata?.userId === userId && m.metadata?.type === 'research_session')
+      .map(m => {
+        // Strip markdown symbols for summary
+        const rawContent = m.content || '';
+        const summary = rawContent
+          .replace(/^#+\s*/gm, '')
+          .replace(/[\*\[\]\-_`]/g, '')
+          .slice(0, 150)
+          .trim();
+
+        // Extract full markdown from content (between ## AI Output and ## CSV)
+        const mdMatch = rawContent.match(/## AI Output\n([\s\S]*?)(?=## CSV|$)/);
+        const fullMarkdown = mdMatch ? mdMatch[1].trim() : '';
+
+        return {
+          sessionId:    m.metadata?.sessionId || 'unknown',
+          recordedAt:   m.metadata?.recordedAt || new Date().toISOString(),
+          sessionType:  m.metadata?.sessionType || 'GENERAL',
+          summary,
+          fullMarkdown
+        };
+      });
+
+    res.json({ ok: true, sessions: userSessions });
+  } catch (err) {
+    console.error('[sessions] Error:', err.message);
+    res.json({ ok: true, sessions: [] });
+  }
+});
+
+
+// ── POST /action — Targeted AI follow-up actions ─────────────────────────────
+app.post('/action', async (req, res) => {
+  const { action, sessionType, markdown, csv } = req.body;
+  if (!action || !markdown) {
+    return res.status(400).json({ error: 'Missing action or markdown' });
+  }
+
+  const context = csv ? `${markdown}\n\nCSV Data:\n${csv}` : markdown;
+
+  const actionPrompts = {
+    summary: {
+      system: 'You are a research analyst. Write clean, professional prose.',
+      user:   `Write a 150-200 word polished summary paragraph of this research session. No bullets, no headers, clean flowing prose only.\n\n${context}`
+    },
+    outline: {
+      system: 'You are a document structure expert.',
+      user:   `Create a Google Doc ready outline from this research session with an H1 title, H2 sections, and bullet sub-items.\n\n${context}`
+    },
+    sources: {
+      system: 'You are a research librarian.',
+      user:   `Based on this research session, identify exactly 3 specific gaps in the sources. For each gap, provide an exact search query the user should run referencing the actual topic.\n\n${context}`
+    },
+    intro: {
+      system: 'You are an essay writer.',
+      user:   `Write a 100-word essay introduction with an engaging hook naming the specific topic from this research session.\n\n${context}`
+    },
+    gaps: {
+      system: 'You are a critical research analyst.',
+      user:   `Identify the 3 most important missing pieces from this research session and state exactly where to find them.\n\n${context}`
+    },
+    itinerary: {
+      system: 'You are a travel planner.',
+      user:   `Create a complete day-by-day itinerary with times, activities, and estimated costs based on this planning session.\n\n${context}`
+    },
+    budget: {
+      system: 'You are a financial planner.',
+      user:   `Create a full budget breakdown table in markdown with categories and totals based on this session.\n\n${context}`
+    },
+    alternatives: {
+      system: 'You are a comparison shopping expert.',
+      user:   `Suggest 3 specific cheaper or better alternatives referencing actual items from this session.\n\n${context}`
+    },
+    litreview: {
+      system: 'You are an academic researcher.',
+      user:   `Create a structured literature review outline with themes, methodologies, and key findings based on this research session.\n\n${context}`
+    }
+  };
+
+  const promptConfig = actionPrompts[action];
+  if (!promptConfig) {
+    return res.status(400).json({ error: `Unknown action: ${action}` });
+  }
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model:       'gpt-4o-mini',
+      temperature: 0.3,
+      max_tokens:  1000,
+      messages: [
+        { role: 'system', content: promptConfig.system },
+        { role: 'user',   content: promptConfig.user }
+      ]
+    });
+
+    const result = completion.choices[0].message.content.trim();
+    res.json({ ok: true, result });
+  } catch (err) {
+    console.error('[action]', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 
 const PORT = process.env.PORT || 3000;

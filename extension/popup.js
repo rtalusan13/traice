@@ -1,19 +1,33 @@
 // popup.js — traice v2
-// Handles: session start/end, screenshot paste/drop → Cloudflare R2, UI state
+// Handles: session start/end, screenshot paste/drop → Cloudflare R2, UI state,
+// result persistence, past sessions, next action buttons, profile avatar
 
-const WORKER_URL = 'https://traice-worker.traice.workers.dev';
+const WORKER_URL  = 'https://traice-worker.traice.workers.dev';
+const BACKEND_URL = 'https://traice-backend-26c625a8.aedify.ai';
 
-const startBtn        = document.getElementById('startBtn');
-const endBtn          = document.getElementById('endBtn');
-const resumeBtn       = document.getElementById('resumeBtn');
-const pill            = document.getElementById('pill');
-const pillText        = document.getElementById('pillText');
-const statsEl         = document.getElementById('stats');
-const screenshotZone  = document.getElementById('screenshotZone');
-const thumbsEl        = document.getElementById('thumbs');
-const spinner         = document.getElementById('spinner');
-const outputEl        = document.getElementById('output');
-const csvDownloadBtn  = document.getElementById('csvDownloadBtn');
+const startBtn          = document.getElementById('startBtn');
+const endBtn            = document.getElementById('endBtn');
+const resumeBtn         = document.getElementById('resumeBtn');
+const pill              = document.getElementById('pill');
+const pillText          = document.getElementById('pillText');
+const statsEl           = document.getElementById('stats');
+const screenshotZone    = document.getElementById('screenshotZone');
+const thumbsEl          = document.getElementById('thumbs');
+const spinner           = document.getElementById('spinner');
+const outputEl          = document.getElementById('output');
+const csvDownloadBtn    = document.getElementById('csvDownloadBtn');
+const actionBtnsEl      = document.getElementById('actionBtns');
+const actionResponseEl  = document.getElementById('actionResponse');
+const pastSessionsBtn   = document.getElementById('pastSessionsBtn');
+const pastSessionsPanel = document.getElementById('pastSessionsPanel');
+const pastSessionsList  = document.getElementById('pastSessionsList');
+const backFromSessions  = document.getElementById('backFromSessions');
+const filePickerInput   = document.getElementById('filePickerInput');
+const uploadBtn         = document.getElementById('uploadBtn');
+
+// Track screenshot R2 URLs for this popup session
+let screenshotUrls = [];
+
 
 // ── Session Type Labels ───────────────────────────────────────────────────────
 const SESSION_TYPE_LABELS = {
@@ -23,6 +37,40 @@ const SESSION_TYPE_LABELS = {
   SCIENTIFIC:     'Scientific Research',
   GENERAL:        'General Research'
 };
+
+
+// ── Next Action Definitions ───────────────────────────────────────────────────
+function getNextActions(sessionType) {
+  const actions = {
+    COMPARISON: [
+      { icon: '📊', label: 'Download Spreadsheet', action: 'csv' },
+      { icon: '📝', label: 'Write Summary', action: 'summary' },
+      { icon: '🔍', label: 'Find Missing Data', action: 'gaps' }
+    ],
+    RESEARCH_ESSAY: [
+      { icon: '📄', label: 'Generate Doc Outline', action: 'outline' },
+      { icon: '📚', label: 'Find More Sources', action: 'sources' },
+      { icon: '✍️', label: 'Draft Introduction', action: 'intro' }
+    ],
+    PLANNING: [
+      { icon: '🗓', label: 'Build Itinerary', action: 'itinerary' },
+      { icon: '💰', label: 'Budget Breakdown', action: 'budget' },
+      { icon: '✈️', label: 'Find Alternatives', action: 'alternatives' }
+    ],
+    SCIENTIFIC: [
+      { icon: '🔬', label: 'Identify Gaps', action: 'gaps' },
+      { icon: '📑', label: 'Literature Review', action: 'litreview' },
+      { icon: '📊', label: 'Export Data', action: 'csv' }
+    ],
+    GENERAL: [
+      { icon: '📝', label: 'Summarize Findings', action: 'summary' },
+      { icon: '📊', label: 'Download Spreadsheet', action: 'csv' },
+      { icon: '🔍', label: 'Dig Deeper', action: 'gaps' }
+    ]
+  };
+  return actions[sessionType] || actions.GENERAL;
+}
+
 
 // ── Markdown → HTML Renderer ──────────────────────────────────────────────────
 function renderMarkdown(text) {
@@ -95,9 +143,150 @@ function inlineFmt(text) {
   return text;
 }
 
-// Track screenshot R2 URLs for this popup session
-// (In-memory only — URLs are also stored in chrome.storage.local under 'screenshots')
-let screenshotUrls = [];
+
+// ── Render Full Result ────────────────────────────────────────────────────────
+// Displays the synthesized output: stats → badge → divider → markdown → actions → CSV → past sessions
+function renderResult(result, stats) {
+  const typeLabel = SESSION_TYPE_LABELS[result.sessionType] || 'General Research';
+
+  // Order: stats line → session type badge → divider → rendered markdown
+  outputEl.innerHTML =
+    `<div style="color:#555;font-size:10px;margin-bottom:10px">${stats.highlights} highlights · ${stats.pages} pages · ${stats.scrapes} scrapes · ${stats.images} images</div>` +
+    `<span style="background:#1a1a2e;color:#a78bfa;font-size:10px;padding:3px 10px;border-radius:999px;display:inline-block;margin-bottom:10px">✦ ${typeLabel}</span>` +
+    `<div style="height:1px;background:#1e1e1e;margin-bottom:10px"></div>` +
+    renderMarkdown(result.markdown);
+
+  outputEl.style.display = 'block';
+
+  // Action buttons
+  const actions = getNextActions(result.sessionType);
+  actionBtnsEl.innerHTML = actions.map(a =>
+    `<button class="action-btn" data-action="${a.action}">` +
+    `<span class="action-icon">${a.icon}</span>${a.label}</button>`
+  ).join('');
+  actionBtnsEl.style.display = 'flex';
+
+  // Wire action button clicks
+  actionBtnsEl.querySelectorAll('.action-btn').forEach(btn => {
+    btn.addEventListener('click', () => handleActionClick(btn, result));
+  });
+
+  // CSV download button
+  if (result.csv) {
+    csvDownloadBtn.style.display = 'block';
+    csvDownloadBtn.onclick = () => downloadCsv(result.csv);
+  } else {
+    csvDownloadBtn.style.display = 'none';
+  }
+
+  // Past sessions button
+  pastSessionsBtn.style.display = 'block';
+}
+
+
+// ── Action Button Handler ─────────────────────────────────────────────────────
+async function handleActionClick(btn, result) {
+  const action = btn.dataset.action;
+
+  // CSV download handled locally
+  if (action === 'csv' && result.csv) {
+    downloadCsv(result.csv);
+    return;
+  }
+
+  // All other actions → POST to backend
+  const origHTML = btn.innerHTML;
+  btn.innerHTML = `<span class="action-icon">⏳</span>thinking…`;
+  btn.disabled = true;
+
+  try {
+    const resp = await fetch(`${BACKEND_URL}/action`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action,
+        sessionType: result.sessionType,
+        markdown:    result.markdown,
+        csv:         result.csv
+      })
+    });
+    const data = await resp.json();
+    if (data.ok && data.result) {
+      actionResponseEl.style.display = 'block';
+      actionResponseEl.innerHTML =
+        `<div style="color:#555;font-size:10px;margin-bottom:8px">✦ traice suggests</div>` +
+        `<div style="height:1px;background:#1e1e1e;margin-bottom:8px"></div>` +
+        renderMarkdown(data.result);
+    }
+  } catch (err) {
+    console.error('[traice] Action failed:', err);
+  } finally {
+    btn.innerHTML = origHTML;
+    btn.disabled = false;
+  }
+}
+
+
+// ── CSV Download Helper ───────────────────────────────────────────────────────
+function downloadCsv(csvContent) {
+  const blob = new Blob([csvContent], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'traice-session.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+
+// ── Profile Avatar ────────────────────────────────────────────────────────────
+async function loadProfileAvatar() {
+  const avatarEl = document.getElementById('profileAvatar');
+  if (!avatarEl) return;
+  try {
+    const profile = await new Promise((resolve, reject) => {
+      chrome.identity.getProfileUserInfo({ accountStatus: 'ANY' }, (info) => {
+        if (chrome.runtime.lastError) reject(chrome.runtime.lastError);
+        else resolve(info);
+      });
+    });
+    if (profile?.email) {
+      const initial = profile.email.charAt(0).toUpperCase();
+      if (profile.id) {
+        const img = document.createElement('img');
+        img.style.cssText = 'width:100%;height:100%;object-fit:cover;';
+        img.onerror = () => {
+          avatarEl.innerHTML = '';
+          avatarEl.style.background = '#1a1a2e';
+          avatarEl.style.color = '#a78bfa';
+          avatarEl.style.fontSize = '13px';
+          avatarEl.style.fontWeight = '600';
+          avatarEl.textContent = initial;
+        };
+        img.onload = () => {
+          avatarEl.innerHTML = '';
+          avatarEl.appendChild(img);
+          avatarEl.style.border = '1.5px solid #a78bfa';
+        };
+        img.src = `https://lh3.googleusercontent.com/a/${profile.id}`;
+        avatarEl.innerHTML = '';
+        avatarEl.appendChild(img);
+      } else {
+        avatarEl.textContent = initial;
+        avatarEl.style.background = '#1a1a2e';
+        avatarEl.style.color = '#a78bfa';
+        avatarEl.style.fontWeight = '600';
+      }
+      avatarEl.title = profile.email;
+    } else {
+      avatarEl.textContent = '○';
+      avatarEl.style.color = '#444';
+      avatarEl.title = 'Not signed into Chrome';
+    }
+  } catch (err) {
+    console.log('[traice] Could not load profile:', err.message);
+  }
+}
 
 
 // ── UI State Helpers ──────────────────────────────────────────────────────────
@@ -107,6 +296,14 @@ function setUI(state) {
   endBtn.style.display    = state !== 'idle'   ? 'block' : 'none';
   resumeBtn.style.display = state === 'paused' ? 'block' : 'none';
   screenshotZone.style.display = state !== 'idle' ? 'block' : 'none';
+  uploadBtn.style.display      = state !== 'idle' ? 'block' : 'none';
+
+  // Zone pulse animation only when active
+  if (state === 'active') {
+    screenshotZone.classList.add('session-active');
+  } else {
+    screenshotZone.classList.remove('session-active');
+  }
 
   pill.className = `pill ${state}`;
   pillText.textContent = state === 'idle' ? 'Idle'
@@ -117,19 +314,26 @@ function setUI(state) {
 
 // ── Restore state on popup open ───────────────────────────────────────────────
 chrome.storage.local.get(
-  ['sessionActive', 'sessionPaused', 'events', 'screenshots'],
+  ['sessionActive', 'sessionPaused', 'events', 'screenshots', 'lastResult'],
   (data) => {
     if (data.sessionActive) {
       setUI(data.sessionPaused ? 'paused' : 'active');
       updateStats(data.events || []);
       // Restore thumbnails from stored URLs
-      (data.screenshots || []).forEach(url => addThumb(url, false));
+      (data.screenshots || []).forEach(s => addThumb(s, false));
       screenshotUrls = (data.screenshots || []).map(s => s.r2Url);
     } else {
       setUI('idle');
+      // Restore last result if session is not active and result exists
+      if (data.lastResult) {
+        renderResult(data.lastResult, data.lastResult.stats);
+      }
     }
   }
 );
+
+// Load profile avatar on popup open
+loadProfileAvatar();
 
 
 // ── Session Controls ──────────────────────────────────────────────────────────
@@ -142,9 +346,21 @@ startBtn.addEventListener('click', () => {
     events: [],
     screenshots: []
   });
+  // Clear previous result so it doesn't bleed into new session
+  chrome.storage.local.remove('lastResult');
   chrome.runtime.sendMessage({ type: 'SESSION_START' });
   screenshotUrls = [];
   thumbsEl.innerHTML = '';
+  // Reset all output areas
+  outputEl.style.display = 'none';
+  outputEl.innerHTML = '';
+  actionBtnsEl.style.display = 'none';
+  actionBtnsEl.innerHTML = '';
+  actionResponseEl.style.display = 'none';
+  actionResponseEl.innerHTML = '';
+  csvDownloadBtn.style.display = 'none';
+  pastSessionsBtn.style.display = 'none';
+  pastSessionsPanel.style.display = 'none';
   setUI('active');
   statsEl.textContent = '0 events captured';
 });
@@ -162,14 +378,18 @@ endBtn.addEventListener('click', async () => {
   endBtn.disabled = true;
   spinner.style.display = 'block';
   outputEl.style.display = 'none';
+  actionBtnsEl.style.display = 'none';
+  actionResponseEl.style.display = 'none';
+  csvDownloadBtn.style.display = 'none';
 
-  const data = await chrome.storage.local.get(['events', 'sessionId', 'screenshots']);
+  const data = await chrome.storage.local.get(['events', 'sessionId', 'screenshots', 'userId']);
 
   const payload = {
     sessionId:   data.sessionId || 'unknown',
     timestamp:   new Date().toISOString(),
     events:      data.events || [],
-    screenshots: data.screenshots || []   // array of { r2Url, timestamp, caption }
+    screenshots: data.screenshots || [],
+    userId:      data.userId || 'anonymous'
   };
 
   try {
@@ -180,38 +400,29 @@ endBtn.addEventListener('click', async () => {
     });
     const result = await resp.json();
     spinner.style.display = 'none';
-    outputEl.style.display = 'block';
 
     if (result.csv || result.markdown) {
-      const typeLabel = SESSION_TYPE_LABELS[result.sessionType] || 'General Research';
       const evts = payload.events;
-      const hCount = evts.filter(e => e.type === 'highlight').length;
-      const pCount = evts.filter(e => e.type === 'navigation').length;
-      const dCount = evts.filter(e => e.type === 'dwell_scrape').length;
-      const sCount = evts.filter(e => e.type === 'screenshot').length;
+      const resultStats = {
+        highlights: evts.filter(e => e.type === 'highlight').length,
+        pages:      new Set(evts.filter(e => e.url).map(e => e.url)).size,
+        scrapes:    evts.filter(e => e.type === 'dwell_scrape').length,
+        images:     (data.screenshots || []).length
+      };
 
-      outputEl.innerHTML =
-        `<span style="background:#1a1a2e;color:#a78bfa;font-size:10px;padding:3px 10px;border-radius:999px;display:inline-block;margin-bottom:10px">✦ ${typeLabel}</span>` +
-        `<div style="color:#555;font-size:10px;margin-bottom:10px">${hCount} highlights · ${pCount} pages · ${dCount} scrapes · ${sCount} images</div>` +
-        `<div style="height:1px;background:#1e1e1e;margin-bottom:10px"></div>` +
-        renderMarkdown(result.markdown);
+      // Persist result for popup reopen
+      const storedResult = {
+        sessionType:   result.sessionType,
+        csv:           result.csv,
+        markdown:      result.markdown,
+        synthesizedAt: result.synthesizedAt,
+        stats:         resultStats
+      };
+      chrome.storage.local.set({ lastResult: storedResult });
 
-      // CSV download
-      if (result.csv) {
-        csvDownloadBtn.style.display = 'block';
-        csvDownloadBtn.onclick = () => {
-          const blob = new Blob([result.csv], { type: 'text/csv' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = 'traice-session.csv';
-          a.click();
-          URL.revokeObjectURL(url);
-        };
-      } else {
-        csvDownloadBtn.style.display = 'none';
-      }
+      renderResult(storedResult, resultStats);
     } else {
+      outputEl.style.display = 'block';
       outputEl.textContent = result.error || '⚠️ No output returned.';
       csvDownloadBtn.style.display = 'none';
     }
@@ -225,8 +436,74 @@ endBtn.addEventListener('click', async () => {
 });
 
 
+// ── Past Sessions ─────────────────────────────────────────────────────────────
+pastSessionsBtn.addEventListener('click', async () => {
+  pastSessionsBtn.textContent = 'Loading sessions…';
+  pastSessionsBtn.disabled = true;
+
+  try {
+    const { userId } = await chrome.storage.local.get('userId');
+    if (!userId) {
+      pastSessionsList.innerHTML = '<p style="color:#555;font-size:11px;text-align:center;padding:16px 0">No user ID found. Complete a session first.</p>';
+      pastSessionsPanel.style.display = 'block';
+      pastSessionsBtn.style.display = 'none';
+      return;
+    }
+
+    const resp = await fetch(`${BACKEND_URL}/sessions?userId=${encodeURIComponent(userId)}`);
+    const data = await resp.json();
+    const sessions = data.sessions || [];
+
+    if (sessions.length === 0) {
+      pastSessionsList.innerHTML = '<p style="color:#555;font-size:11px;text-align:center;padding:16px 0">No past sessions yet. Complete a session to see your history here.</p>';
+    } else {
+      pastSessionsList.innerHTML = sessions.map((s, idx) => {
+        const date = new Date(s.recordedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        const time = new Date(s.recordedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        const typeLabel = SESSION_TYPE_LABELS[s.sessionType] || 'General Research';
+        const preview = (s.summary || '').replace(/[#*\[\]\-_]/g, '').slice(0, 80);
+
+        return `<div class="session-card" data-idx="${idx}">` +
+          `<span style="background:#1a1a2e;color:#a78bfa;font-size:9px;padding:2px 8px;border-radius:999px">✦ ${typeLabel}</span>` +
+          `<div class="session-date">${date} · ${time}</div>` +
+          `<div class="session-preview">${preview}${preview.length >= 80 ? '…' : ''}</div>` +
+          `<div class="session-expanded" style="display:none">${renderMarkdown(s.fullMarkdown || '')}</div>` +
+          `</div>`;
+      }).join('');
+
+      // Toggle expand on click
+      pastSessionsList.querySelectorAll('.session-card').forEach(card => {
+        card.addEventListener('click', () => {
+          const expanded = card.querySelector('.session-expanded');
+          const isOpen = expanded.style.display !== 'none';
+          // Close all others first
+          pastSessionsList.querySelectorAll('.session-expanded').forEach(e => e.style.display = 'none');
+          expanded.style.display = isOpen ? 'none' : 'block';
+        });
+      });
+    }
+
+    pastSessionsPanel.style.display = 'block';
+    pastSessionsBtn.style.display = 'none';
+  } catch (err) {
+    console.error('[traice] Failed to load sessions:', err);
+    pastSessionsList.innerHTML = '<p style="color:#555;font-size:11px;text-align:center;padding:16px 0">Failed to load sessions.</p>';
+    pastSessionsPanel.style.display = 'block';
+    pastSessionsBtn.style.display = 'none';
+  } finally {
+    pastSessionsBtn.textContent = '📋 Past Sessions';
+    pastSessionsBtn.disabled = false;
+  }
+});
+
+backFromSessions.addEventListener('click', () => {
+  pastSessionsPanel.style.display = 'none';
+  pastSessionsBtn.style.display = 'block';
+});
+
+
 // ── Screenshot Handling ───────────────────────────────────────────────────────
-// Accepts: paste (Ctrl+V / Cmd+V) or drag-and-drop onto the zone
+// Accepts: paste (Ctrl+V / Cmd+V), drag-and-drop, or file picker
 // Flow: image blob → POST /upload-screenshot on Worker → R2 → get back public URL
 //       → store URL in chrome.storage.local → show thumbnail
 
@@ -315,14 +592,24 @@ function addThumb(screenshot, uploading = false, id = null) {
   thumbsEl.appendChild(div);
 }
 
-// Paste handler
+// Paste handler — check for image first, then preventDefault
 document.addEventListener('paste', async (e) => {
+  const item = [...e.clipboardData.items].find(i => i.type.startsWith('image/'));
+  if (!item) return;
+  e.preventDefault();
+
   const { sessionActive } = await chrome.storage.local.get('sessionActive');
   if (!sessionActive) return;
 
-  const item = [...e.clipboardData.items].find(i => i.type.startsWith('image/'));
-  if (!item) return;
   handleImageFile(item.getAsFile());
+});
+
+// File picker
+uploadBtn.addEventListener('click', () => filePickerInput.click());
+filePickerInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (file?.type.startsWith('image/')) handleImageFile(file);
+  filePickerInput.value = ''; // reset so same file can be re-selected
 });
 
 // Drag and drop

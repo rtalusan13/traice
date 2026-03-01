@@ -3,8 +3,19 @@
 //   1. Inactivity pause/resume (30s idle → pause, any activity → resume)
 //   2. Route INGEST_EVENT messages → local storage + Cloudflare KV
 //   3. URL/tab navigation tracking
+//   4. Persistent user identity generation
 
 const WORKER_URL         = 'https://traice-worker.traice.workers.dev';
+
+// ── User Identity ─────────────────────────────────────────────────────────────
+// Generate a persistent userId on first install. Never shown to user.
+chrome.runtime.onInstalled.addListener(async () => {
+  const { userId } = await chrome.storage.local.get('userId');
+  if (!userId) {
+    await chrome.storage.local.set({ userId: crypto.randomUUID() });
+    console.log('[traice] New user ID generated');
+  }
+});
 const INACTIVITY_PAUSE_MS = 30_000;
 
 let inactivityTimer = null;
